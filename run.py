@@ -574,7 +574,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         model.update_occupancy_cache_lt_nviews(
                 rays_o_tr, rays_d_tr, imsz, render_kwargs, cfg_train.maskout_lt_nviews)
 
-
+    # add pose refine
     img_i = [[b for i in range(n)] for b,n in enumerate(imsz)]
     ray_ind = []
     for i in img_i:
@@ -638,7 +638,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 target_depth = depth_tr[sel_i]
                 target_seg = seg_tr[sel_i]
 
-
+            # add pose refine
             if pose_net:
                 target = target.to(device)
                 rays_o = rays_o.to(device)
