@@ -1,7 +1,7 @@
 _base_ = '../nerf_unbounded/nerf_unbounded_default.py'
 
-expname = '0032150_24_420^3'
-basedir = './waymo/pipe_train'
+expname = '0032150_24_420^3_pr_1e4_1w-2w'
+basedir = './waymo/test'
 
 data = dict(
     datadir='../Snerf/full_datasets/datasets/0032150',
@@ -36,9 +36,12 @@ fine_train = dict(
     patch_size=[32,32],
 
     posenet_config=dict(
-        if_refine=False,
+        if_refine=True,
         learn_r=True,
-        learn_t=True
+        learn_t=True,
+        lr=1e-5,
+        begin=1e4,
+        end=2e4
     )
 
 )

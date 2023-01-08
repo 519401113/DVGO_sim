@@ -758,3 +758,39 @@ def batch_indices_generator_mix(N, patch_size, n_rand=4096):
         top += rand_batch
         top_p += patch_batch
 
+
+def batch_mix_one_img(patch_size, n_rand, imsz):
+    "sample rays from one img"
+    bs = (patch_size[0] * patch_size[1])
+    patch_batch = n_rand//2//bs
+    rand_batch = n_rand//2
+    N = imsz[0] # assert every img has same size
+    N_p = N//bs
+    num_img = len(imsz)
+
+    img_ind, img_top = torch.LongTensor(np.random.permutation(num_img)), 0
+    idx_p, top_p = torch.LongTensor(np.random.permutation(N_p)), 0
+    idx, top = torch.LongTensor(np.random.permutation(N)), 0
+    while True:
+        if img_top+1 > num_img:
+            img_ind, img_top = torch.LongTensor(np.random.permutation(num_img)), 0
+        if top_p+patch_batch > N_p:
+            idx_p, top_p = torch.LongTensor(np.random.permutation(N_p)), 0
+        if top + rand_batch > N:
+            idx, top = torch.LongTensor(np.random.permutation(N)), 0
+
+        shift = N*img_ind[img_top]
+
+
+        patch = torch.cat([torch.LongTensor(list(range(idx_p[top_p+i] * bs+shift, (idx_p[top_p+i]+1) * bs+shift)))
+                           for i in range(patch_batch)], dim=0)
+        rand = idx[(shift+top):(shift+top+rand_batch)]
+        yield torch.cat([patch, rand], dim=0)
+        top += rand_batch
+        top_p += patch_batch
+
+        # every iter change img_top
+        img_top += 1
+
+
+

@@ -102,12 +102,12 @@ class LearnPose(nn.Module):
         self.r = nn.Parameter(torch.zeros(size=(num_cams, 3), dtype=torch.float32), requires_grad=learn_R)  # (N, 3)
         self.t = nn.Parameter(torch.zeros(size=(num_cams, 3), dtype=torch.float32), requires_grad=learn_t)  # (N, 3)
 
-    def forward(self, cam_id, transform_only=False):
-        # r = self.r[cam_id]  # (3, ) axis-angle
-        #
-        # t = self.t[cam_id]  # (3, )
-        #
-        # c2w = make_c2w(r, t)  # (4, 4)
+    def forward(self, cam_id, transform_only=False, one_img=False):
+        if one_img:
+            r = self.r[cam_id[0]]  # (3, ) axis-angle
+            t = self.t[cam_id[0]]  # (3, )
+            c2w = make_c2w(r, t)  # (4, 4)
+            return c2w[None]
 
         c2ws = []
         for i in range(self.num_cams):

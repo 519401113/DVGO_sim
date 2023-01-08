@@ -28,4 +28,8 @@ for idx, scene_name in enumerate(scene_list):
             attr = line
             if '0032150' in line:
                 attr = attr.replace('0032150', scene_name)
+            if "basedir" in line:
+                attr = "basedir = \"./waymo_ckpt/pipe_train\"\n"
+            if 'expname' in line:
+                attr = "expname = \"{}\"\n".format(scene_name)
             file.write(attr)

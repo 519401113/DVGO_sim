@@ -527,7 +527,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 rgb_tr, depth_tr, seg_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz = result
             else:
                 rgb_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz = result
-        elif cfg_train.ray_sampler in ['patch','mixed']:
+        elif cfg_train.ray_sampler in ['patch','mixed','one_img_mixed']:
             result = dvgo.get_training_rays_patch(
                 rgb_tr_ori=rgb_tr_ori,
                 train_poses=poses[i_train],
@@ -550,6 +550,9 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             index_generator = dvgo.batch_indices_generator_patch(len(rgb_tr), patch_size)
         if cfg_train.ray_sampler == 'mixed':
             index_generator = dvgo.batch_indices_generator_mix(len(rgb_tr), patch_size, cfg_train.N_rand)
+        if cfg_train.ray_sampler == 'one_img_mixed':
+            index_generator = dvgo.batch_mix_one_img(patch_size, cfg_train.N_rand, imsz)
+
         batch_index_sampler = lambda: next(index_generator)
         if depth:
             return rgb_tr,depth_tr, seg_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz, batch_index_sampler
@@ -582,18 +585,22 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     ray_ind = torch.LongTensor(ray_ind).to(device)
 
 
-    train_pose = 0
+    train_pose = False
     pose_net=None
+    posenet_begin, posenet_end = cfg_train.posenet_config.begin, cfg_train.posenet_config.end
     if cfg_train.posenet_config.if_refine:
         from lib.posenet import LearnPose
         pose_net = LearnPose(len(imsz),cfg_train.posenet_config.learn_r,
                              cfg_train.posenet_config.learn_t)
         pose_net.to(device)
         pose_net.train()
-        train_pose = 1
+        pose_net_lr = cfg_train.posenet_config.lr
+
         optimizer_pose =torch.optim.Adam([
-            {'params':[p for p in pose_net.parameters() if p.requires_grad], 'lr':1e-4}],
+            {'params':[p for p in pose_net.parameters() if p.requires_grad], 'lr':pose_net_lr}], # default 1e-4
         )
+        for param in pose_net.parameters():
+            param.requires_grad = False
     # GOGO
     torch.cuda.empty_cache()
     psnr_lst = []
@@ -621,13 +628,18 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             model.act_shift -= cfg_train.decay_after_scale
             torch.cuda.empty_cache()
 
-        # random sample rays
-        if global_step>10000 and train_pose:
+        # add pose net
+        if global_step==posenet_begin and not train_pose and pose_net:
+            for param in pose_net.parameters():
+                param.requires_grad = True
+            train_pose = True
+        if global_step==posenet_end and train_pose:
             for param in pose_net.parameters():
                 param.requires_grad = False
             train_pose = False
 
-        if cfg_train.ray_sampler in ['flatten', 'in_maskcache','patch','mixed']:
+        # random sample rays
+        if cfg_train.ray_sampler in ['flatten', 'in_maskcache','patch','mixed','one_img_mixed']:
             sel_i = batch_index_sampler()
 
             target = rgb_tr[sel_i]
@@ -645,10 +657,15 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 rays_d = rays_d.to(device)
                 viewdirs = viewdirs.to(device)
                 cam_id = ray_ind[sel_i]
-                refine_poses = pose_net(cam_id)
+                if cfg_train.ray_sampler == "one_img_mixed":
+                    assert cam_id.float().mean() == cam_id[0], "Sample rays from different imgs!"
+                    refine_poses = pose_net(cam_id, one_img=True)
+                else:
+                    refine_poses = pose_net(cam_id)
+
                 rays_o = rays_o+refine_poses[:,:3,3]
-                rays_d = (rays_d[...,None]*refine_poses[:,:3,:3]).sum(-1)
-                viewdirs = (viewdirs[...,None]*refine_poses[:,:3,:3]).sum(-1)
+                rays_d = (rays_d[:,None,:]*refine_poses[:,:3,:3]).sum(-1)
+                viewdirs = (viewdirs[:,None,:]*refine_poses[:,:3,:3]).sum(-1)
 
 
             # import pdb;
@@ -969,7 +986,7 @@ if __name__=='__main__':
         os.makedirs(testsavedir, exist_ok=True)
         print('All results are dumped into', testsavedir)
         ### for debug
-        # data_dict['i_test'] = data_dict['i_test'][:10]
+        data_dict['i_test'] = data_dict['i_test'][:10]
         rgbs, depths, bgmaps, segs = render_viewpoints_with_seg(
                 render_poses=data_dict['poses'][data_dict['i_test']],
                 HW=data_dict['HW'][data_dict['i_test']],
