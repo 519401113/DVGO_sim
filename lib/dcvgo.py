@@ -112,7 +112,8 @@ class DirectContractedVoxGO(nn.Module):
                 self.s0 = None
 
             # self.register_buffer('viewfreq', torch.FloatTensor([(2 ** i) for i in range(viewbase_pe)]))
-            dim0 = (3 + 3 * viewbase_pe * 2)
+            # dim0 = (3 + 3 * viewbase_pe * 2)
+            dim0 = 0
             dim0 += self.s0_dim
             self.segnet = nn.Sequential(
                 nn.Linear(dim0, segnet_width), nn.ReLU(inplace=True),
@@ -461,7 +462,8 @@ class DirectContractedVoxGO(nn.Module):
             else:
                 s0 = k0
 
-            seg_feat = torch.cat([s0, viewdirs_emb], -1)
+            # seg_feat = torch.cat([s0, viewdirs_emb], -1)
+            seg_feat = s0
             seg_logit = self.segnet(seg_feat)
             seg = torch.softmax(seg_logit, -1)
             seg_marched = segment_coo(
