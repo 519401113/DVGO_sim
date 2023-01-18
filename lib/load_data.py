@@ -136,8 +136,16 @@ def load_data(args):
         H =args.H;W=args.W
         ## set bd_factor 0,,,
         depths, bds, bds_raw,skymask= load_depth_map(args.datadir,H,W,bd_factor=0)
+        from .load_nuscenes import load_mask
+        masks = load_mask(args)
+        import pdb; pdb.set_trace()
+
         segmentation_name = os.path.basename(args.datadir)+'.npy'
-        segmentation = load_full_semantic(args.datadir,segformer=True,label_specific=segmentation_name)
+        if os.path.exists(os.path.join(args.datadir, segmentation_name)):
+            segmentation = load_full_semantic(args.datadir, segformer=True, label_specific=segmentation_name)
+        else:
+            segmentation = np.ones_like(masks)
+
         images, poses, render_poses, render_depth, render_focal, K = load_nuscenes_data(args, bds_raw,bd_factor=0)
         near,far=depths[depths>0.5].min(),depths[depths<150].max()
         hwf = (H,W,(1280**2+1920**2)**(1/2)/2)
@@ -183,6 +191,7 @@ def load_data(args):
         images=images, depths=depths,
         irregular_shape=irregular_shape,
         segmentations=segmentation,
+        masks=masks
     )
     return data_dict
 

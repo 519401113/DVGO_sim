@@ -1,10 +1,10 @@
 _base_ = '../nerf_unbounded/nerf_unbounded_default.py'
 
-expname = '0032150_24_360^3_pr_nt_1e5_1w-2w_near_meanmask_'
-basedir = './waymo/test'
+expname = '0014075_24_360^3_pr_nt_1e5_1w-2w_far'
+basedir = './waymo/masked'
 
 data = dict(
-    datadir='../Snerf/full_datasets/datasets/0032150',
+    datadir='../processed_scenes/0014075',
     dataset_type='waymo',
     white_bkgd=False,
     datahold = 4,
@@ -38,7 +38,7 @@ fine_train = dict(
     posenet_config=dict(
         if_refine=True,
         learn_r=True,
-        learn_t=True,
+        learn_t=False,
         lr=1e-5,
         begin=1e4,
         end=2e4
@@ -51,7 +51,7 @@ fine_train.update(dict(
     smoothness_loss = 0.001,
     # ray_sampler='flatten',
     ray_sampler='mixed',
-    bounding_near=True,
+    bounding_near=False,
 ))
 fine_model_and_render = dict(
     num_voxels=320**3,

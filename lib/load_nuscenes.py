@@ -91,6 +91,27 @@ def preprocess_poses(raw_pose):
     # R.from_matrix(poses[2,:3,:3]).as_euler('yxz')*180/np.pi
     return poses
 
+def load_mask(args):
+    path = args.datadir
+    imgdir = os.path.join(path, 'images')
+    num = len(os.listdir(imgdir))/5
+    # assert isinstance(num, int), "wrong image number"
+    mask_paths = [os.path.join(path, 'mask', a) for a in sorted(os.listdir(imgdir))]
+    masks = []
+    for i, mask_path in enumerate(mask_paths):
+        if os.path.exists(mask_path):
+            mask = imageio.imread(mask_path)
+            ### 暂时没有加上语义的判断条件
+            mask[mask>0] = 1
+
+        else:
+            mask = np.zeros([1280,1920])
+            if i>=3*num:
+                mask[886:] = 1
+        masks.append(mask)
+    return np.stack(masks, 0)
+
+
 def load_nuscenes_data(args, bds_raw, bd_factor=.75):
     render_focal = None
     render_depth = None
@@ -242,8 +263,9 @@ def load_depth_map(path, H, W, bd_factor=.75, sky_mask=False):
     #     'coord': i_dir,
     #     'weight': np.ones_like(d_value)
     # } for d_value, i_dir in zip(depth_values, idx_dirs)]
+    max_far = 50
 
-    return depth, (depth[depth > 0.5].min(), depth[depth < 150].max()), bds_raw, skymask
+    return depth, (depth[depth > 0.5].min(), depth[depth < max_far].max()), bds_raw, skymask
 
 
 # ## the ori function

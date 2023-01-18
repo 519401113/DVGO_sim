@@ -38,7 +38,7 @@ fine_train = dict(
     posenet_config=dict(
         if_refine=True,
         learn_r=True,
-        learn_t=True,
+        learn_t=False,
         lr=1e-5,
         begin=1e4,
         end=2e4
@@ -48,9 +48,10 @@ fine_train = dict(
 fine_train.update(dict(
     N_iters=60000,
     depth_loss = 1,
-    smoothness_loss = 0.01,
+    smoothness_loss = 0.001,
     # ray_sampler='flatten',
-    ray_sampler='mixed'
+    ray_sampler='mixed',
+    bounding_near=False,
 ))
 fine_model_and_render = dict(
     num_voxels=320**3,
@@ -83,8 +84,8 @@ fine_model_and_render = dict(
 )
 
 fine_model_and_render.update(dict(
-    num_voxels=420**3,   # ori 320
-    num_voxels_base=420**3, # ori 320
+    num_voxels=360**3,   # ori 320, 420
+    num_voxels_base=360**3, # ori 320
     rgbnet_dim=24,                # ori 12, v1 24
     rgbnet_depth=3,               # depth of the colors MLP (there are rgbnet_depth-1 intermediate features)
     rgbnet_width=512,             # width of the colors MLP

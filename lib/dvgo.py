@@ -614,10 +614,12 @@ def get_training_rays_patch(rgb_tr_ori,train_poses, HW, Ks, ndc, inverse_y, flip
     eps_time = time.time()
     DEVICE = rgb_tr_ori[0].device
     N = sum(im.shape[0] * im.shape[1] for im in rgb_tr_ori)
-    rgb_tr = torch.zeros([N,3], device=DEVICE)
-    rays_o_tr = torch.zeros_like(rgb_tr)
-    rays_d_tr = torch.zeros_like(rgb_tr)
-    viewdirs_tr = torch.zeros_like(rgb_tr)
+    dim = rgb_tr_ori.shape[-1]
+
+    rgb_tr = torch.zeros([N,dim], device=DEVICE)
+    rays_o_tr = torch.zeros([N,3], device=DEVICE)
+    rays_d_tr = torch.zeros_like(rays_o_tr)
+    viewdirs_tr = torch.zeros_like(rays_o_tr)
     imsz = []
     top = 0
     if depth_tr_ori is not None:

@@ -272,13 +272,13 @@ def load_everything(args, cfg):
     kept_keys = {
             'hwf', 'HW', 'Ks', 'near', 'far', 'near_clip',
             'i_train', 'i_val', 'i_test', 'irregular_shape',
-            'poses', 'render_poses', 'images','depths', 'segmentations'}
+            'poses', 'render_poses', 'images','depths', 'segmentations','masks'}
     for k in list(data_dict.keys()):
         if k not in kept_keys:
             data_dict.pop(k)
 
     ## 只选前150张图片，因为后100张图片有黑色区域
-    data_dict['i_train'] = [i for i in data_dict['i_train'] if i < 150]
+    # data_dict['i_train'] = [i for i in data_dict['i_train'] if i < 150]
     # data_dict['i_test'] = [i for i in data_dict['i_test'] if i < 150]
     # data_dict['i_val'] = [i for i in data_dict['i_val'] if i < 150]
 
@@ -293,6 +293,7 @@ def load_everything(args, cfg):
         data_dict['segmentations'] = torch.tensor(data_dict['segmentations'], device='cpu')
 
     data_dict['poses'] = torch.Tensor(data_dict['poses'])
+    data_dict['masks'] = torch.FloatTensor(data_dict['masks'], device='cpu')
     return data_dict
 
 
@@ -356,11 +357,14 @@ def _compute_bbox_unbounded_near_far(cfg, HW, Ks, poses, i_train, near, far):
 def compute_bbox_by_cam_frustrm(args, cfg, HW, Ks, poses, i_train, near, far, **kwargs):
     print('compute_bbox_by_cam_frustrm: start')
     if cfg.data.unbounded_inward:
-        # ori function
-        # xyz_min, xyz_max = _compute_bbox_by_cam_frustrm_unbounded(
-        #         cfg, HW, Ks, poses, i_train, kwargs.get('near_clip', None))
-        xyz_min, xyz_max = _compute_bbox_unbounded_near_far(
+        ##ori function
+        if cfg.fine_train.get('bounding_near', True):
+            xyz_min, xyz_max = _compute_bbox_by_cam_frustrm_unbounded(
+                cfg, HW, Ks, poses, i_train, kwargs.get('near_clip', None))
+        else:
+            xyz_min, xyz_max = _compute_bbox_unbounded_near_far(
                 cfg, HW, Ks, poses, i_train, near, far)
+
 
     else:
         xyz_min, xyz_max = _compute_bbox_by_cam_frustrm_bounded(
@@ -492,7 +496,8 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     # patch_size = [64, 64]  # for h,w
     patch_size = cfg_train.patch_size
     # patch_size = [640,640]  # for h,w
-
+    masks = data_dict['masks']
+    images = torch.cat([images, masks[...,None]], -1)
     # init batch rays sampler
     def gather_training_rays(depth=False):
         if data_dict['irregular_shape']:
@@ -522,7 +527,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 train_poses=poses[i_train],
                 HW=HW[i_train], Ks=Ks[i_train], ndc=cfg.data.ndc, inverse_y=cfg.data.inverse_y,
                 flip_x=cfg.data.flip_x, flip_y=cfg.data.flip_y,
-                depth_tr_ori=depth_tr_ori,seg_tr_ori=seg_tr_ori)
+                depth_tr_ori=depth_tr_ori,seg_tr_ori=seg_tr_ori, )
             if depth_tr_ori is not None:
                 rgb_tr, depth_tr, seg_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz = result
             else:
@@ -558,10 +563,19 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             return rgb_tr,depth_tr, seg_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz, batch_index_sampler
         else:
             return rgb_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz, batch_index_sampler
+
+
+
     if cfg_train.depth_loss>0:
         rgb_tr,depth_tr, seg_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz, batch_index_sampler = gather_training_rays(depth=True)
     else:
         rgb_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz, batch_index_sampler = gather_training_rays()
+
+    images = images[...,:3]
+    mask_tr = rgb_tr[..., 3]
+    rgb_tr = rgb_tr[...,:3]
+
+
     # view-count-based learning rate
     if cfg_train.pervoxel_lr:
         def per_voxel_init():
@@ -650,6 +664,8 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 target_depth = depth_tr[sel_i]
                 target_seg = seg_tr[sel_i]
 
+            mask = mask_tr[sel_i].to(device)
+
             # add pose refine
             if pose_net:
                 target = target.to(device)
@@ -704,7 +720,8 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         if train_pose:
             optimizer_pose.zero_grad()
 
-        loss = cfg_train.weight_main * F.mse_loss(render_result['rgb_marched'], target)
+
+        loss = cfg_train.weight_main * F.mse_loss(render_result['rgb_marched'][mask==0], target[mask==0])
         psnr = utils.mse2psnr(loss.detach())
         if cfg_train.weight_entropy_last > 0:
             pout = render_result['alphainv_last'].clamp(1e-6, 1-1e-6)
@@ -725,13 +742,14 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             loss_distortion = flatten_eff_distloss(w, s, 1/n_max, ray_id)
             loss += cfg_train.weight_distortion * loss_distortion
         if cfg_train.weight_rgbper > 0:
-            rgbper = (render_result['raw_rgb'] - target[render_result['ray_id']]).pow(2).sum(-1)
-            rgbper_loss = (rgbper * render_result['weights'].detach()).sum() / len(rays_o)
+            mask_per = mask[render_result['ray_id']]
+            rgbper = (render_result['raw_rgb'][mask_per==0] - target[render_result['ray_id']][mask_per==0]).pow(2).sum(-1)
+            rgbper_loss = (rgbper * render_result['weights'][mask_per==0].detach()).sum() / len(rays_o)
             loss += cfg_train.weight_rgbper * rgbper_loss
         if cfg_train.depth_loss>0:
 
             target_depth = target_depth.to(device)
-            dep_mask = target_depth>0.1
+            dep_mask = (target_depth>0.1) *(mask==0)
             depth_loss = torch.clamp((1/(render_result['depth'][dep_mask]+1e-6) - 1/target_depth[[dep_mask]]).abs(),min=1e-6, max=100).mean()
             # depth_loss= torch.clamp((render_result['depth'] - target_depth).abs(),min=1e-6).mean()
             loss += cfg_train.depth_loss * depth_loss
@@ -742,7 +760,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 continue
             seg_predict = render_result['segmentation']
             nllloss = nn.NLLLoss()
-            seg_loss = nllloss(torch.log(seg_predict+1e-6), target_seg.long())
+            seg_loss = nllloss(torch.log(seg_predict[mask==0]+1e-6), target_seg[mask==0].long())
             loss += seg_loss*0.04
 
             # add smoothness loss
@@ -751,7 +769,19 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                     else len(render_result['depth'])//2
                 from lib.utils import edge_aware_loss_v2
                 disp = 1/(render_result['depth'][:length]+1e-6)
+
+                ## 添加mask训练，尽可能使得mask区域平滑一些
+                mask = mask[:length]
+                mean_disp = disp.detach().reshape(-1,patch_size[0]*patch_size[1]).mean(1, keepdim=True).\
+                    repeat(1,patch_size[0]*patch_size[1]).reshape(-1)
+                disp[mask>0] = disp[mask>0]*0+mean_disp[mask>0]
+                mean_target = target[:length].reshape(-1,patch_size[0]*patch_size[1],3).mean(1, keepdim=True).\
+                    repeat(1,patch_size[0]*patch_size[1],1).reshape(-1,3)
+                target[:length][mask>0] = target[:length][mask>0]*0+mean_target[mask>0]
+
                 disp = disp.reshape(-1,patch_size[0],patch_size[1],1)
+
+
                 rgb_patch = target[:length].reshape(-1,patch_size[0],patch_size[1],3)
                 smoothness_loss = edge_aware_loss_v2(rgb_patch,disp)
                 loss += cfg_train.smoothness_loss*smoothness_loss
@@ -952,7 +982,7 @@ if __name__=='__main__':
         os.makedirs(testsavedir, exist_ok=True)
         print('All results are dumped into', testsavedir)
         ### for debug
-        data_dict['i_train'] = data_dict['i_train'][:10]
+        # data_dict['i_train'] = data_dict['i_train'][:10]
         rgbs, depths, bgmaps, segs = render_viewpoints_with_seg(
                 render_poses=data_dict['poses'][data_dict['i_train']],
                 HW=data_dict['HW'][data_dict['i_train']],
@@ -986,7 +1016,7 @@ if __name__=='__main__':
         os.makedirs(testsavedir, exist_ok=True)
         print('All results are dumped into', testsavedir)
         ### for debug
-        data_dict['i_test'] = data_dict['i_test'][:10]
+        # data_dict['i_test'] = data_dict['i_test'][:10]
         rgbs, depths, bgmaps, segs = render_viewpoints_with_seg(
                 render_poses=data_dict['poses'][data_dict['i_test']],
                 HW=data_dict['HW'][data_dict['i_test']],
