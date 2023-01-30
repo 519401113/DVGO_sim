@@ -10,7 +10,7 @@ from .load_tankstemple import load_tankstemple_data
 from .load_deepvoxels import load_dv_data
 from .load_co3d import load_co3d_data
 from .load_nerfpp import load_nerfpp_data
-from .load_nuscenes import load_nuscenes_data,load_depth_map, load_full_semantic
+from .load_nuscenes import load_nuscenes_data,load_depth_map, load_full_semantic, load_png_semantic
 
 def load_data(args):
 
@@ -138,10 +138,11 @@ def load_data(args):
         depths, bds, bds_raw,skymask= load_depth_map(args.datadir,H,W,bd_factor=0)
         from .load_nuscenes import load_mask
         masks = load_mask(args)
-        import pdb; pdb.set_trace()
 
         segmentation_name = os.path.basename(args.datadir)+'.npy'
-        if os.path.exists(os.path.join(args.datadir, segmentation_name)):
+        if os.path.exists(os.path.join(args.datadir, 'labels')):
+            segmentation = load_png_semantic(args)
+        elif os.path.exists(os.path.join(args.datadir, segmentation_name)):
             segmentation = load_full_semantic(args.datadir, segformer=True, label_specific=segmentation_name)
         else:
             segmentation = np.ones_like(masks)
@@ -150,7 +151,8 @@ def load_data(args):
         near,far=depths[depths>0.5].min(),depths[depths<150].max()
         hwf = (H,W,(1280**2+1920**2)**(1/2)/2)
         near_clip = near
-        i_val=i_test=[i for i in range(images.shape[0])][::args.datahold]
+        datahold = 10
+        i_val=i_test=[i for i in range(images.shape[0])][::datahold]
         i_train = np.array([i for i in np.arange(int(images.shape[0])) if
                      (i not in i_test and i not in i_val)])
         # images, depths, poses, bds, render_poses, i_test = load_llff_data(

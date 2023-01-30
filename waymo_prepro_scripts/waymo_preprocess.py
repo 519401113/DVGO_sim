@@ -48,53 +48,53 @@ if __name__ == '__main__':
     img_num = args.img_num
     height = args.height;width = args.width
     close_depth = args.near;inf_depth = args.far
-    ############### Start preprocesing x
-    from kitti_pose_image import get_ego_pose,convert_pose
-    # Decode poses
-    print('pose processing')
-    try:
-        ego_poses = get_ego_pose(args)
-        K, cam2lidar = convert_pose(args)
-        c2w = ego_poses @ cam2lidar
-        np.save(os.path.join(args.scene_name,'c2w.npy'), c2w)
-        np.save(os.path.join(args.scene_name,'intrinsic.npy'), K)
-        poses = generate_poses(args)
-        save_poses=[]
-        for i in range(poses.shape[0]):
-            save_poses.append(
-                np.concatenate([poses[i,...].ravel(), 
-                np.array([close_depth, inf_depth]),
-                np.array([height, width])], 0))
-        np.save(os.path.join(scene_name,'poses_bounds.npy'),save_poses)
-        print('Saved poses')
-    except FileNotFoundError:
-        print('Poses Not Found')
-    ################################################################ Images
-    print('images processing')
-    try:
-        for i in ['image_0', 'image_1', 'image_2','image_3','image_4']:
-            k = 0
-            for j in sorted(os.listdir(os.path.join(imgdir,i)), key=lambda x:int(x.split('.')[0])):
-                padding=np.zeros((height,width,3))
-                if i in ['image_0', 'image_1', 'image_2']:
-                    images.append(cv2.imread(os.path.join(imgdir,i,j)))
-                else:
-                    padding[:886,...]=cv2.imread(os.path.join(imgdir,i,j))
-                    images.append(padding)
-                k += 1
-                if k > img_num:
-                    break
-
-        images=np.stack(images,axis=0)
-        save_imgs=images.reshape(5,-1,height,width,3)
-        # save_imgs=save_imgs[:,1:,...]  # cyr 不筛depth map
-        save_imgs=save_imgs.reshape(-1,height,width,3)
-        os.makedirs(os.path.join(scene_name,'images'),exist_ok=True)
-        for i in range(save_imgs.shape[0]):
-            cv2.imwrite(os.path.join(scene_name,'images','{:04d}.png'.format(i)),save_imgs[i])
-        print('Saved images')
-    except FileNotFoundError:
-        print('Images Not found')
+    # ############### Start preprocesing x
+    # from kitti_pose_image import get_ego_pose,convert_pose
+    # # Decode poses
+    # print('pose processing')
+    # try:
+    #     ego_poses = get_ego_pose(args)
+    #     K, cam2lidar = convert_pose(args)
+    #     c2w = ego_poses @ cam2lidar
+    #     np.save(os.path.join(args.scene_name,'c2w.npy'), c2w)
+    #     np.save(os.path.join(args.scene_name,'intrinsic.npy'), K)
+    #     poses = generate_poses(args)
+    #     save_poses=[]
+    #     for i in range(poses.shape[0]):
+    #         save_poses.append(
+    #             np.concatenate([poses[i,...].ravel(),
+    #             np.array([close_depth, inf_depth]),
+    #             np.array([height, width])], 0))
+    #     np.save(os.path.join(scene_name,'poses_bounds.npy'),save_poses)
+    #     print('Saved poses')
+    # except FileNotFoundError:
+    #     print('Poses Not Found')
+    # ################################################################ Images
+    # print('images processing')
+    # try:
+    #     for i in ['image_0', 'image_1', 'image_2','image_3','image_4']:
+    #         k = 0
+    #         for j in sorted(os.listdir(os.path.join(imgdir,i)), key=lambda x:int(x.split('.')[0])):
+    #             padding=np.zeros((height,width,3))
+    #             if i in ['image_0', 'image_1', 'image_2']:
+    #                 images.append(cv2.imread(os.path.join(imgdir,i,j)))
+    #             else:
+    #                 padding[:886,...]=cv2.imread(os.path.join(imgdir,i,j))
+    #                 images.append(padding)
+    #             k += 1
+    #             if k > img_num:
+    #                 break
+    #
+    #     images=np.stack(images,axis=0)
+    #     save_imgs=images.reshape(5,-1,height,width,3)
+    #     # save_imgs=save_imgs[:,1:,...]  # cyr 不筛depth map
+    #     save_imgs=save_imgs.reshape(-1,height,width,3)
+    #     os.makedirs(os.path.join(scene_name,'images'),exist_ok=True)
+    #     for i in range(save_imgs.shape[0]):
+    #         cv2.imwrite(os.path.join(scene_name,'images','{:04d}.png'.format(i)),save_imgs[i])
+    #     print('Saved images')
+    # except FileNotFoundError:
+    #     print('Images Not found')
 
     ################################################################ Depth
     print('depth processing')
@@ -121,5 +121,5 @@ if __name__ == '__main__':
     except FileNotFoundError:
         print('Depth Not Found')
 
-        
+
     

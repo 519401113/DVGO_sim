@@ -112,6 +112,16 @@ def load_mask(args):
     return np.stack(masks, 0)
 
 
+def load_png_semantic(args):
+    path = args.datadir
+    imgdir = os.path.join(path, 'labels')
+    mask_paths = [os.path.join(path, 'labels', a) for a in sorted(os.listdir(imgdir))]
+    masks = []
+    for i, mask_path in enumerate(mask_paths):
+        mask = imageio.imread(mask_path)
+        masks.append(mask)
+    return np.stack(masks, 0)
+
 def load_nuscenes_data(args, bds_raw, bd_factor=.75):
     render_focal = None
     render_depth = None
@@ -217,6 +227,8 @@ def load_full_semantic(path,segformer=False,label_specific = ''):
             return np.load(os.path.join(path,'full_semantic_mmseg.npy')).astype(np.int64)
         else:
             return np.load(os.path.join(path,label_specific)).astype(np.int64)
+
+
 
 
 def load_depth_map(path, H, W, bd_factor=.75, sky_mask=False):

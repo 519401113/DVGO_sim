@@ -114,7 +114,12 @@ class BBox():
         # return 1-(((bbox1.location-bbox2.location)**2).sum())
 
     def visible(self):
-        if self.location[2,0] > 0:
+        v11 = self.location + self.axis @ (self.whl * v1)
+        v22 = self.location + self.axis @ (self.whl * v2)
+        v = np.concatenate([v11, v22], -1)
+        # if self.location[2,0] > 0:
+        # import pdb; pdb.set_trace()
+        if v[2].max() > 0:
             return True
         else:
             return False
@@ -124,7 +129,7 @@ class BBox():
         vv = np.concatenate([v1, v2], axis=1)
         vv = self.location + self.axis @ (self.whl*vv)
         vv = K @ vv
-        vv = vv[:2]/abs(vv[2])
+        vv = vv[:2]/vv[2]
         vv = vv.astype('int')
 
         first_point = vv.max(1)
@@ -220,6 +225,18 @@ class Object_List():
             #                 vector=mean_vector)
             #     self.bbox_list[i] = [bbox]
 
+    def remove_moving(self):
+        static_bbox_list = []
+        static_bbox_attr = []
+        for i, attr in enumerate(self.bbox_attr):
+            if not attr['moving']:
+                static_bbox_list.append(self.bbox_list[i])
+                static_bbox_attr.append(attr)
+        self.global_bbox = copy.deepcopy(self.bbox_list)
+        self.global_attr = copy.deepcopy(self.bbox_attr)
+        self.bbox_list = static_bbox_list
+        self.bbox_attr = static_bbox_attr
+
 
     def change_world(self, c2w):
         for l in self.bbox_list:
@@ -240,7 +257,9 @@ class Object_List():
                     bbox.draw_3d_box(save_path, K, save_path)
         return save
 
-    def create_mask(self, intrinsic, path=None, if_pad=False):
+    def create_mask(self, intrinsic, path=None, if_pad=False, debug=False):
+        # if debug:
+        #     import pdb; pdb.set_trace()
         mask_all = np.zeros([1280,1920])
         cat = {'Car':2, 'Cyclist': 3, 'Pedestrian': 7}
         sorted_bbox = self.bbox_list.sort(key=lambda x: -x[-1].location[2,0])
@@ -365,7 +384,7 @@ def create_mask(scene_dir, dataset_dir, num=50):
     cam_id = 0
     start = 0
     frames = sorted(os.listdir(join(scene_dir, 'image_0')))
-    num = min(len(frames), 50)
+    num = min(len(frames),1000)
     label_root = scene_dir
 
     for i,frame in enumerate(frames):
@@ -376,12 +395,15 @@ def create_mask(scene_dir, dataset_dir, num=50):
         if not os.path.exists(label_path):
             continue
         if start == 0:
-            object1 = Object_List.build_from_a_path(label_path, c2ws[cam_id, i], visible=True)
+            object1 = Object_List.build_from_a_path(label_path, c2ws[cam_id, i], visible=False)
             start = 1
         else:
-            object2 = Object_List.build_from_a_path(label_path, c2ws[cam_id, i], visible=True)
+            object2 = Object_List.build_from_a_path(label_path, c2ws[cam_id, i], visible=False)
             object1 = Object_List.fuse_2_list(object1, object2)
 
+    if start == 0:
+        print('|------ Nothing to add ------|')
+        return 0
     object1.fuse_self()
     print('|------ fuse bbox lists complete ------|')
 
@@ -404,6 +426,8 @@ def create_mask(scene_dir, dataset_dir, num=50):
         if len(i_bbox) == 0:
             continue
 
+
+
         mvoblist = Object_List([[a] for a in i_bbox], global_world=True)
         print('|------ save masks of {} ------|'.format(frame))
         for j in range(5):
@@ -411,6 +435,11 @@ def create_mask(scene_dir, dataset_dir, num=50):
             c2w = c2ws[j, i]
             intrinsic = intrinsics[j, i]
             mvoblist.change_world(np.linalg.inv(c2w))
+
+            # if i==9:
+            #     tt = Object_List([[mvoblist[2][0]]])
+            #     tt.create_mask(intrinsic=intrinsic, path='test.png', debug=True)
+
             if_pad = False if j < 3 else True
             mvoblist.create_mask(intrinsic=intrinsic, path=join(dataset_dir, 'mask', "%04d.png"%mask_id), if_pad=if_pad)
             mvoblist.resume_from_global()
@@ -429,7 +458,7 @@ def add_bbox(scene_path, result_path, dataset_path):
 
 
     for idx,frame in enumerate(frames):
-        label_path = join(scene_path, 'label_0', frame.replace('png','txt'))
+        label_path = join(scene_path, 'label_all', frame.replace('png','txt'))
         if not os.path.exists(label_path):
             continue
         if idx>49:
@@ -447,6 +476,7 @@ def add_bbox(scene_path, result_path, dataset_path):
         return 0
     obj_path = join(dataset_path, 'all_obj.txt')
     object1.fuse_self()
+    object1.remove_moving()
     object1.save(obj_path)
 
     # import pdb; pdb.set_trace()
@@ -496,18 +526,19 @@ def pipe_add():
 
 if __name__ == '__main__':
 
-    # pipe_add()
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--scene_name', type=str, default='0017085')
-    parser.add_argument('--dataset_dir', type=str, default='/SSD_DISK/users/chenyurui/masked_pd_scenes')
-    parser.add_argument('--scene_dir', type=str, default='/SSD_DISK/users/chenyurui/select_waymo_scenes')
-    args = parser.parse_args()
-    scene_index = args.scene_name
-    dataset_dir = join(args.dataset_dir, scene_index)
-    scene_dir = join(args.scene_dir, scene_index)
-    create_mask(scene_dir, dataset_dir)
+    data_root = '/SSD_DISK/users/chenyurui/PS/waymo_scenes' ## waymo kitti format scenes
+    out_dir = '/SSD_DISK/users/chenyurui/Snerf/mv_datasets' ## DVGO dataloader format dataset dir
+    os.makedirs(out_dir, exist_ok=True)
+    scenes = sorted(os.listdir(data_root))
+    # import pdb; pdb.set_trace()
 
+    # scene_index = '0047140'
+    # dataset_dir = join(out_dir, scene_index)
+    # scene_dir = join(data_root, scene_index)
+    # create_mask(scene_dir, dataset_dir)
 
-
+    for scene_index in scenes:
+        dataset_dir = join(out_dir, scene_index)
+        scene_dir = join(data_root, scene_index)
+        create_mask(scene_dir, dataset_dir)
 

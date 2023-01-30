@@ -333,7 +333,8 @@ def _compute_bbox_by_cam_frustrm_unbounded(cfg, HW, Ks, poses, i_train, near_cli
     return xyz_min, xyz_max
 
 ## 利用near和far
-def _compute_bbox_unbounded_near_far(cfg, HW, Ks, poses, i_train, near, far):
+def _compute_bbox_unbounded_near_far(cfg, HW, Ks, poses, i_train, near, far, far_max=10):
+    far = min(far, far_max)
     xyz_min = torch.Tensor([np.inf, np.inf, np.inf])
     xyz_max = -xyz_min
     for (H, W), K, c2w in zip(HW[i_train], Ks[i_train], poses[i_train]):
