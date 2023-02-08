@@ -1,10 +1,10 @@
 _base_ = '../nerf_unbounded/nerf_unbounded_default.py'
 
-expname = '0014075_no_dir'
+expname = '0043155_dep_comp_smo_0.001_dl_0.5'
 basedir = './waymo/test'
 
 data = dict(
-    datadir='../Snerf/mv_datasets/0014075',
+    datadir='../Snerf/depcomp_datasets/0043155',
     dataset_type='waymo',
     white_bkgd=False,
     datahold = 4,
@@ -48,7 +48,7 @@ fine_train = dict(
 fine_train.update(dict(
     N_iters=60000,
     depth_loss = 1,
-    smoothness_loss = 0.01,
+    smoothness_loss = 0.001,
     # ray_sampler='flatten',
     ray_sampler='mixed',
     bounding_near=False,
@@ -87,7 +87,7 @@ fine_model_and_render.update(dict(
     num_voxels=320**3,   # ori 320, 420
     num_voxels_base=320**3, # ori 320
     rgbnet_dim=24,                # ori 12, v1 24
-    use_dir=False,
+    use_dir=True,
     rgbnet_depth=3,               # depth of the colors MLP (there are rgbnet_depth-1 intermediate features)
     rgbnet_width=512,             # width of the colors MLP
     alpha_init=1e-2,

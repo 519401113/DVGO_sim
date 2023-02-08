@@ -1,10 +1,10 @@
 _base_ = '../nerf_unbounded/nerf_unbounded_default.py'
 
-expname = '0032150_24_360^3_pr_nt_1e5_1w-2w_near_meanmask_'
+expname = '0032150_new_data'
 basedir = './waymo/test'
 
 data = dict(
-    datadir='../Snerf/full_datasets/datasets/0032150',
+    datadir='../Snerf/mv_datasets/0032150',
     dataset_type='waymo',
     white_bkgd=False,
     datahold = 4,
@@ -36,9 +36,9 @@ fine_train = dict(
     patch_size=[32,32],
 
     posenet_config=dict(
-        if_refine=True,
+        if_refine=False,  ## true for 4h, false for 1h
         learn_r=True,
-        learn_t=True,
+        learn_t=False,
         lr=1e-5,
         begin=1e4,
         end=2e4
@@ -48,10 +48,10 @@ fine_train = dict(
 fine_train.update(dict(
     N_iters=60000,
     depth_loss = 1,
-    smoothness_loss = 0.001,
+    smoothness_loss = 0.01,
     # ray_sampler='flatten',
     ray_sampler='mixed',
-    bounding_near=True,
+    bounding_near=False,
 ))
 fine_model_and_render = dict(
     num_voxels=320**3,
@@ -72,20 +72,20 @@ fine_model_and_render = dict(
 
     # segmetation params
     seg_config = dict(
-        segnet_dim=0,  # ori 12
+        segnet_dim=12,  # ori 12
         segnet_depth=3,
         segnet_width=512,
         s0_type='DenseGrid',
         s0_config=dict(),
         seg_class=19,
         # let rgb and seg use the same feature grid, the k0 feature dim would be seg+rgb
-        fuse_rgb_and_seg=True,
+        fuse_rgb_and_seg=False,
     ),
 )
 
 fine_model_and_render.update(dict(
-    num_voxels=360**3,   # ori 320, 420
-    num_voxels_base=360**3, # ori 320
+    num_voxels=320**3,   # ori 320, 420
+    num_voxels_base=320**3, # ori 320
     rgbnet_dim=24,                # ori 12, v1 24
     rgbnet_depth=3,               # depth of the colors MLP (there are rgbnet_depth-1 intermediate features)
     rgbnet_width=512,             # width of the colors MLP

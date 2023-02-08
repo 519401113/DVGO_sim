@@ -44,6 +44,7 @@ class DirectContractedVoxGO(nn.Module):
                  rgbnet_dim=0,
                  rgbnet_depth=3, rgbnet_width=128,
                  viewbase_pe=4,
+                 use_dir=True,
                  **kwargs):
         super(DirectContractedVoxGO, self).__init__()
         # xyz_min/max are the boundary that separates fg and bg scene
@@ -136,6 +137,7 @@ class DirectContractedVoxGO(nn.Module):
             'rgbnet_dim': rgbnet_dim_raw,
             'rgbnet_depth': rgbnet_depth, 'rgbnet_width': rgbnet_width,
             'viewbase_pe': viewbase_pe,
+            'use_dir': use_dir
         }
         self.k0_type = k0_type
         self.k0_config = k0_config
@@ -156,7 +158,10 @@ class DirectContractedVoxGO(nn.Module):
                 xyz_min=self.xyz_min, xyz_max=self.xyz_max,
                 config=self.k0_config)
             self.register_buffer('viewfreq', torch.FloatTensor([(2**i) for i in range(viewbase_pe)]))
+            self.use_dir = use_dir
             dim0 = (3+3*viewbase_pe*2)
+            if not use_dir:
+                dim0 = 0
             dim0 += self.k0_dim
             self.rgbnet = nn.Sequential(
                 nn.Linear(dim0, rgbnet_width), nn.ReLU(inplace=True),
@@ -410,6 +415,8 @@ class DirectContractedVoxGO(nn.Module):
             viewdirs_emb = torch.cat([viewdirs, viewdirs_emb.sin(), viewdirs_emb.cos()], -1)
             viewdirs_emb = viewdirs_emb.flatten(0,-2)[ray_id]
             rgb_feat = torch.cat([k0, viewdirs_emb], -1)
+            if not self.use_dir:
+                rgb_feat = k0
             rgb_logit = self.rgbnet(rgb_feat)
             rgb = torch.sigmoid(rgb_logit)
 

@@ -755,6 +755,12 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             # depth_loss= torch.clamp((render_result['depth'] - target_depth).abs(),min=1e-6).mean()
             loss += cfg_train.depth_loss * depth_loss
 
+            comdep_mask = (target_depth>0.1) *(mask>0)*(mask<255)
+            comdep_loss = torch.clamp((1/(render_result['depth'][comdep_mask]+1e-6) - 1/target_depth[[comdep_mask]]).abs(),min=1e-6, max=100).mean()
+            # depth_loss= torch.clamp((render_result['depth'] - target_depth).abs(),min=1e-6).mean()
+            loss += 0.5*cfg_train.depth_loss * comdep_loss
+
+
             # segmentation
             target_seg = target_seg.to(device)
             if 'segmentation' not in render_result.keys():
